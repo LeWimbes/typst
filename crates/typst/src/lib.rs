@@ -41,7 +41,6 @@ pub use typst_utils as utils;
 
 use std::sync::LazyLock;
 
-use arrayvec::ArrayVec;
 use comemo::{Track, Tracked};
 use ecow::{EcoString, EcoVec, eco_format, eco_vec};
 use rustc_hash::FxHashSet;
@@ -53,9 +52,7 @@ use typst_library::format::Format;
 use typst_library::foundations::{
     NativeRuleMap, Output, StyleChain, Styles, Target, TargetElem, Value,
 };
-use typst_library::introspection::{
-    EmptyIntrospector, ITER_NAMES, Introspector, MAX_ITERS,
-};
+use typst_library::introspection::{EmptyIntrospector, Introspector, iter_name};
 use typst_library::routines::Routines;
 use typst_syntax::{FileId, Span};
 use typst_timing::{TimingScope, timed};
@@ -131,13 +128,16 @@ fn compile_impl<T: Output>(
     )?
     .content();
 
-    let mut history: ArrayVec<T, { MAX_ITERS - 1 }> = ArrayVec::new();
+    // The number of layout iterations we are allowed to perform.
+    // The history holds every document but the final one, so it is one shorter.
+    let max_iters = library.max_iters;
+    let mut history: Vec<T> = Vec::with_capacity(max_iters.saturating_sub(1));
     let mut document: T;
 
     // Relayout until all introspections stabilize.
-    // If that doesn't happen within five attempts, we give up.
+    // If that doesn't happen within `max_iters` attempts, we give up.
     loop {
-        let _scope = TimingScope::new(ITER_NAMES[history.len()]);
+        let _scope = TimingScope::new(iter_name(history.len()));
         let introspector = history
             .last()
             .map(|doc| doc.introspector())
@@ -161,17 +161,16 @@ fn compile_impl<T: Output>(
             break;
         }
 
-        if history.is_full() {
-            let mut introspectors =
-                [&empty_introspector as &dyn Introspector; MAX_ITERS + 1];
-            for i in 1..MAX_ITERS {
-                introspectors[i] = history[i - 1].introspector();
-            }
-            introspectors[MAX_ITERS] = document.introspector();
+        if history.len() + 1 >= max_iters {
+            let mut introspectors: Vec<&dyn Introspector> =
+                Vec::with_capacity(max_iters + 1);
+            introspectors.push(&empty_introspector);
+            introspectors.extend(history.iter().map(|doc| doc.introspector()));
+            introspectors.push(document.introspector());
 
             let warnings = typst_library::introspection::analyze(
                 world,
-                introspectors,
+                &introspectors,
                 subsink.introspections(),
             );
 

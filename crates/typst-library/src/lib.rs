@@ -39,6 +39,7 @@ use crate::format::Format;
 use crate::foundations::{
     Array, Binding, Bytes, Datetime, Dict, Duration, Module, NativeRuleMap, Scope, Styles,
 };
+use crate::introspection::DEFAULT_MAX_ITERS;
 use crate::layout::{Alignment, Dir};
 use crate::routines::Routines;
 use crate::text::{Font, FontBook};
@@ -185,6 +186,8 @@ pub struct Library {
     pub features: Features,
     /// Registered [export formats](crate::format).
     pub formats: Vec<Format>,
+    /// The maximum number of layout iterations performed while trying to reach a stable document.
+    pub max_iters: usize,
 }
 
 /// Configurable builder for the standard library.
@@ -196,6 +199,7 @@ pub struct LibraryBuilder {
     inputs: Option<Dict>,
     features: Features,
     formats: Vec<Format>,
+    max_iters: usize,
 }
 
 impl LibraryBuilder {
@@ -210,6 +214,7 @@ impl LibraryBuilder {
             inputs: None,
             features: Features::default(),
             formats: formats.into_iter().collect(),
+            max_iters: DEFAULT_MAX_ITERS,
         }
     }
 
@@ -224,6 +229,19 @@ impl LibraryBuilder {
     /// No guarantees whatsover!
     pub fn with_features(mut self, features: Features) -> Self {
         self.features = features;
+        self
+    }
+
+    /// Configure the maximum number of layout iterations the compiler
+    /// performs in an attempt to reach a stable document.
+    ///
+    /// If the document does not stabilize within this limit,
+    /// compilation ends with a non-convergence warning.
+    /// Defaults to [`DEFAULT_MAX_ITERS`].
+    ///
+    /// The value is clamped to at least 1.
+    pub fn with_max_iters(mut self, max_iters: usize) -> Self {
+        self.max_iters = max_iters.max(1);
         self
     }
 
@@ -245,6 +263,7 @@ impl LibraryBuilder {
             std: Binding::detached(global),
             features: self.features,
             formats: self.formats,
+            max_iters: self.max_iters,
         }
     }
 }

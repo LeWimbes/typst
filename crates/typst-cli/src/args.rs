@@ -22,6 +22,12 @@ use typst_utils::display_possible_values;
 /// in environment variables.
 const ENV_PATH_SEP: char = if cfg!(windows) { ';' } else { ':' };
 
+/// The default for `--max-layout-iterations`.
+///
+/// Mirrors `typst_library::introspection::DEFAULT_MAX_ITERS`,
+/// which cannot be imported here because this module is also used from the build script.
+const DEFAULT_MAX_LAYOUT_ITERATIONS: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+
 /// The overall structure of the help.
 #[rustfmt::skip]
 const HELP_TEMPLATE: &str = "\
@@ -478,6 +484,22 @@ pub struct ProcessArgs {
     /// The format to emit diagnostics in.
     #[clap(long, default_value_t, env = "TYPST_DIAGNOSTIC_FORMAT")]
     pub diagnostic_format: DiagnosticFormat,
+
+    /// The maximum number of layout iterations the compiler
+    /// performs in an attempt to reach a stable document.
+    ///
+    /// If the document does not stabilize within this limit,
+    /// compilation ends with a non-convergence warning.
+    /// Raising it lets documents with heavy introspection converge
+    /// at the cost of longer compile times.
+    #[clap(
+        long = "max-layout-iterations",
+        default_value_t = DEFAULT_MAX_LAYOUT_ITERATIONS,
+        env = "TYPST_MAX_LAYOUT_ITERATIONS",
+        value_parser = parse_max_layout_iterations,
+        value_name = "COUNT"
+    )]
+    pub max_layout_iterations: NonZeroUsize,
 }
 
 /// Arguments related to where packages are stored in the system.
@@ -809,6 +831,15 @@ fn parse_page_number(value: &str) -> Result<NonZeroUsize, &'static str> {
         Err("page numbers start at one")
     } else {
         NonZeroUsize::from_str(value).map_err(|_| "not a valid page number")
+    }
+}
+
+/// Parses the maximum number of layout iterations.
+fn parse_max_layout_iterations(value: &str) -> Result<NonZeroUsize, &'static str> {
+    if value == "0" {
+        Err("at least one layout iteration is required")
+    } else {
+        NonZeroUsize::from_str(value).map_err(|_| "not a valid iteration count")
     }
 }
 

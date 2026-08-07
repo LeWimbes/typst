@@ -71,9 +71,10 @@ impl SystemWorld {
                 typst_render::FORMAT,
                 typst_bundle::FORMAT,
             ])
-            .with_inputs(inputs)
-            .with_features(features)
-            .build()
+                .with_inputs(inputs)
+                .with_features(features)
+                .with_max_iters(process_args.max_layout_iterations.get())
+                .build()
         };
 
         let now = match world_args.creation_timestamp {
